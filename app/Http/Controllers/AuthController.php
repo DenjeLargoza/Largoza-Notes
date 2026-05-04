@@ -6,10 +6,34 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use App\Models\User;
+use Illuminate\Support\Facades\Http;
 
 class AuthController extends Controller
 {
     //login
+    public function showLogin()
+    {
+        $apiKey = env('OPENWEATHER_API_KEY');
+        $city = 'Sogod, Southern Leyte';
+
+        $weather = null;
+        try {
+            $response = Http::get("https://api.openweathermap.org/data/2.5/weather?q={$city}&appid={$apiKey}&units=metric");
+            if ($response->successful()) {
+                $data = $response->json();
+
+                $weather = [
+                    'temperature' => $data['main']['temp'],
+                    'description' => $data['weather'][0]['description'],
+                    'city' => $data['name']
+                ];
+            }
+        } catch (\Exception $e) {
+            // Handle exceptions (e.g., log the error)
+            $weather = null;
+        }
+        return view('auth.login', compact('weather'));
+    }
     public function showLoginForm()
     {
         return view('auth.login');

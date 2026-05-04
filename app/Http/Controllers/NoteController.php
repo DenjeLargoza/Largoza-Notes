@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Note;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Http;
 
 
 class NoteController extends Controller
@@ -12,6 +13,36 @@ class NoteController extends Controller
     /**
      * Display a listing of the resource.
      */
+    public function generate(Request $request)
+    {
+        $request->validate([
+            'topic' => 'required|string|max:255'
+        ]);
+
+        $response = Http::withHeaders([
+            'Authorization' => 'Bearer ' . config('services.openai.key'),
+            'Content-Type' => 'application/json',
+        ])->post('https://api.openai.com/v1/chat/completions', [
+            'model' => 'gpt-4.1-mini',
+            'messages' => [
+                [
+                    'role' => 'system',
+                    'content' => 'You are a helpful assistant.'
+                ],
+                [
+                    'role' => 'user',
+                    'content' => 'Create structured notes with headings, bullet points, and examples about: ' . $request->topic
+                ]   
+            ]
+        ]);
+        if($response->failed()) {
+            return back()->withErrors(['api_error' => 'Failed to generate notes. Please try again later.']);
+        }
+        $notes = $response['choices'][0]['message']['content'];
+
+        return redirect('/notes')->with('notes', $notes);
+    }
+
     public function index()
     {
         $user = Auth::user();
@@ -20,13 +51,17 @@ class NoteController extends Controller
             $users = \App\Models\User::with('notes')->get();
             return view('notes.index', [
                 'users' => $users,
-                'isAdmin' => true
+                'isAdmin' => true,
+                'notes' => [],
+                'generatedNotes' => null
             ]);
         } else {
             // Regular user: only their notes
+            $notes = Note::with('user')->latest()->get();
             return view('notes.index', [
-                'notes' => $user->notes()->latest()->get(),
-                'isAdmin' => false
+                'notes' => $notes,
+                'isAdmin' => false,
+                'generatedNotes' => session('notes')
             ]);
         }
     }
